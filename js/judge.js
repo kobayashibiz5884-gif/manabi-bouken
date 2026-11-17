@@ -16,7 +16,13 @@
   }
   // 数字を漢数字に直した形（「3つ」→「三つ」、「10円」→「十円」、「100円」→「百円」、「1000」→「千」）
   function digitsToKanji(s) {
-    return s.replace(/1000/g, '千').replace(/100/g, '百').replace(/10/g, '十').replace(/[0-9]/g, function (d) { return DIGIT[d]; });
+    // 数字のかたまりごとに直す。「12」「21」のような別の数は直さない（「一」「二」を含むと誤って正解になるため）
+    return s.replace(/[0-9]+/g, function (num) {
+      if (num === '1000') return '千';
+      if (num === '100') return '百';
+      if (num === '10') return '十';
+      return num.length === 1 ? DIGIT[num] : num;
+    });
   }
   function stripLong(s) { return s.replace(/ー/g, ''); }
   function isKana(s) { return /^[ぁ-ゖー]+$/.test(s); }
@@ -45,8 +51,14 @@
     // 「ふくまれていれば正解」にしてよい候補か:
     //   漢字を含む候補（山 → 「山です」）、または かな2文字以上（やま → 「えっと、やま」）。
     //   かな1文字（き、め、て）や数字・英字（1, 10）は、ぴったり一致のときだけ。
-    var containOk = !isAscii(a) && (hasKanji(a) || a.length >= 2);
-    if (containOk && t.indexOf(a) >= 0) return true;
+    if (!isAscii(a) && hasKanji(a) && t.indexOf(a) >= 0) return true;
+    // かなの候補（2文字以上）は、前置きや語尾が付いた形だけ正解にする。
+    //   ○「えっと、やま」（最後がその読み）  ○「やまです」（その読み + です/だよ 等）
+    //   ×「おとこのこ」に含まれる「おと」、「せんせい」に含まれる「せん」（別のことばの一部）
+    if (!isAscii(a) && !hasKanji(a) && a.length >= 2) {
+      if (t.length > a.length && t.slice(-a.length) === a) return true;
+      if (t.indexOf(a) === 0 && /^(です|だ|だよ|だね|かな|ですか|っ)$/.test(t.slice(a.length))) return true;
+    }
     // かな4文字以上は、1文字ちがいまで正解（聞き取りのゆれ。例: がっこう/かっこう）
     if (isKana(t2) && isKana(a2) && a2.length >= 4 && Math.abs(t2.length - a2.length) <= 1 && editDistance(t2, a2) <= 1) return true;
     return false;
@@ -116,7 +128,7 @@
         // 長いことばは、つづり1〜2文字ぶんのゆれまで正解
         var fj = f.replace(/ /g, '');
         if (fj.length >= 6) {
-          var lim = fj.length >= 9 ? 2 : 1;
+          var lim = fj.length >= 8 ? 2 : 1;
           for (var k = 0; k < tokens.length; k++) if (editDistance(tokens[k], fj) <= lim) return true;
           if (editDistance(joined, fj) <= lim) return true;
         }
