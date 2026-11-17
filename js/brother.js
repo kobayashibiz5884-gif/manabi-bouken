@@ -7,7 +7,8 @@
   var $ = ui.$, $all = ui.$all, tap = ui.tap, wait = ui.wait, esc = ui.esc;
   var session = null;
   var GUARD_MAX = 3;
-  var FATAL = ['not-allowed', 'service-not-allowed', 'unsupported', 'audio-capture', 'start-failed'];
+  // 聞き取りが使えないと判断して、その回はボタンに切り替えるエラー
+  var FATAL = ['not-allowed', 'service-not-allowed', 'unsupported', 'audio-capture', 'start-failed', 'network'];
 
   function k() { return store.kid('bro'); }
   function say(t, opts) { return audio.speak(t, opts || { pitch: 1.0, rate: 1.0 }); }
@@ -75,6 +76,8 @@
     s.total = s.queue.length;
     MB.app.startTimer(kid, function () { s.timeUp = true; });
 
+    if (s.voice) await openingSpell(s);
+    if (!s.alive) return;
     await narrate(s, 'だい' + (n + 1) + 'わ　' + day.t, day.art, day.intro);
     if (!s.alive) return;
     var midDone = false;
@@ -91,6 +94,34 @@
     }
     if (!s.alive) return;
     await ending(s);
+  }
+
+  // ---- はじまりの じゅもん ----
+  // 毎回の最初に「ひらけ」と唱えてもらう。物語の入口であると同時に、マイクが今日ちゃんと聞こえているかの確認になる。
+  // 聞き取れなければ、その日はボタンで答える形に切り替える（子どもを待たせない）。
+  async function openingSpell(s) {
+    srender('<div class="bro-play"><button class="corner-btn small" id="quit">🏠</button><div class="story">' +
+      '<div class="story-art">🚪✨</div><p class="story-title">はじまりの じゅもん</p>' +
+      '<div class="seal-word" style="text-align:center;font-size:64px">ひらけ</div>' +
+      '<div class="mic" id="mic"></div><div class="heard" id="heard"></div>' +
+      '<button class="skip-btn" id="nomic">🔘 きょうは ボタンで あそぶ</button></div></div>');
+    tap($('#quit'), home);
+    var chosen = false;
+    tap($('#nomic'), function () { chosen = true; s.voice = false; speech.stop(); });
+    await say('いせきの入口だ。はじまりのじゅもんを、となえよう。ひらけ！');
+    for (var i = 0; i < 2 && s.alive && !chosen; i++) {
+      var m = $('#mic'); if (m) { m.textContent = '🎤 「ひらけ」と となえよう'; m.className = 'mic on'; }
+      var heardAny = false;
+      var r = await speech.listen({ lang: 'ja-JP', timeout: 7000, onHeard: function (t) { heardAny = true; var h = $('#heard'); if (h) h.textContent = '「' + t[0] + '」'; return true; } });
+      if (!s.alive || chosen) return;
+      if (r.error && FATAL.indexOf(r.error) >= 0) { s.voice = false; s.voiceError = r.error; break; }
+      if (heardAny || r.all.length) { audio.sfx.seal(); return; }
+      if (i === 0) await say('もういちど、大きな声で。ひらけ！');
+    }
+    if (!s.alive || chosen) return;
+    s.voice = false;
+    var m2 = $('#mic'); if (m2) { m2.textContent = 'きょうは ボタンで こたえよう'; m2.className = 'mic'; }
+    await say('今日は、声がとどかないみたい。ボタンで答えよう。');
   }
 
   // ---- 画面の部品 ----

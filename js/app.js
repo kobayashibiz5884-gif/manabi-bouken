@@ -27,6 +27,7 @@
   function startTimer(kid, onTimeUp) {
     stopTimer();
     timer.kid = kid; timer.onTimeUp = onTimeUp; timer.fired = false;
+    keepAwake();
     timer.id = setInterval(function () {
       if (document.hidden) return;
       store.addSeconds(kid, 1);
@@ -34,7 +35,19 @@
       if (!timer.fired && store.timeLeft(kid) <= 0) { timer.fired = true; if (timer.onTimeUp) timer.onTimeUp(); }
     }, 1000);
   }
-  function stopTimer() { if (timer.id) { clearInterval(timer.id); timer.id = null; store.save(); } }
+  function stopTimer() { if (timer.id) { clearInterval(timer.id); timer.id = null; store.save(); } releaseWake(); }
+
+  // あそんでいる間は、画面が自動で暗くならないようにする（声で遊ぶと画面に触らないため）
+  var wake = null, wakeWanted = false;
+  function keepAwake() {
+    wakeWanted = true;
+    try {
+      if (navigator.wakeLock && navigator.wakeLock.request && !document.hidden) {
+        navigator.wakeLock.request('screen').then(function (w) { wake = w; if (!wakeWanted) releaseWake(); }, function () {});
+      }
+    } catch (e) {}
+  }
+  function releaseWake() { wakeWanted = false; try { if (wake) wake.release(); } catch (e) {} wake = null; }
 
   // ---- 最初の画面: だれが あそぶ？ ----
   function home() {
@@ -62,7 +75,7 @@
   function boot() {
     appEl = document.getElementById('app');
     store.load();
-    document.addEventListener('visibilitychange', function () { if (document.hidden) { store.save(); audio.stop(); } });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) { store.save(); audio.stop(); } else if (wakeWanted) keepAwake(); });
     window.addEventListener('pagehide', function () { store.save(); });
     // ダブルタップでの拡大を止める
     document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });

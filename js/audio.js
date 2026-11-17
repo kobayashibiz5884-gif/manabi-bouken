@@ -60,7 +60,8 @@
   function stop() { speakToken++; if (synth) { try { synth.cancel(); } catch (e) {} } }
 
   // {漢字|かんじ} の書き方から、読み上げ用（漢字）と表示用（ふりがな付き）を作る
-  function ttsText(s) { return s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1').replace(/[ 　]+/g, ''); }
+  // 空白は残す（かなの多い文は、区切りがあるほうが機械の声が読みまちがえにくい）
+  function ttsText(s) { return s.replace(/\{([^|}]+)\|[^}]+\}/g, '$1').replace(/[ 　]+/g, ' '); }
   function rubyHtml(s) {
     return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; })
       .replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');

@@ -57,8 +57,16 @@
       rec.onerror = function (ev) { error = ev.error || 'error'; if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') finish(); };
       rec.onend = finish;
       active = { rec: rec, finish: finish, halt: halt };
-      try { rec.start(); } catch (e) { error = 'start-failed'; finish(); return; }
-      timer = setTimeout(halt, opts.timeout || 8000);
+      // 直前の聞き取りが完全に終わっていないと start に失敗することがあるので、少し待って3回までやり直す
+      var tries = 0;
+      (function begin() {
+        if (done) return;
+        try { rec.start(); timer = setTimeout(halt, opts.timeout || 8000); }
+        catch (e) {
+          if (++tries >= 3) { error = 'start-failed'; finish(); return; }
+          setTimeout(begin, 350);
+        }
+      })();
     });
   }
   function stop() {
